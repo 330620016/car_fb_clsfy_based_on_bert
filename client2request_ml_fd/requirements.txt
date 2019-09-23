@@ -1,0 +1,16 @@
+grpcio==1.14.1
+protobuf==3.6.0
+tensorflow==1.7.0 
+tensorflow-serving-api-python3==1.7.0
+Flask==0.12.2
+numpy==1.14.2
+scipy
+waitress
+pillow
+flask_uploads
+requests
+sap_xssec>=2.0.7
+cfenv>=0.5.3
+pyhdb>=0.3.2
+# workaround
+certifi==2018.1.18

@@ -25,7 +25,7 @@ def get_access_token():
         "POST", url, headers=headers, params=querystring)
     if response.status_code == 200:
         print("******   Done   *****")
-        return 'Bearer ' + json.loads(response.text)['access_token'].encode('ascii', 'ignore')
+        return 'Bearer ' + json.loads(response.text)['access_token']
     else:
         print("******   get token wrong   ******")
         return
@@ -38,7 +38,7 @@ def metadata_transformer(metadata):
     return tuple(metadata) + tuple(additions)
 
 
-@app.route('/', methods=['POST', 'GET'])
+@app.route('/classify', methods=['POST', 'GET'])
 def main():
     # request ml foundation to load model
     credentials = implementations.ssl_channel_credentials(
@@ -48,34 +48,57 @@ def main():
     stub = prediction_service_pb2.beta_create_PredictionService_stub(
         channel, metadata_transformer=metadata_transformer)
 
-    tokenizer = tokenization.FullTokenizer(
-        vocab_file=VOCAB_FILE_PATH, do_lower_case=True)
-
     # get the sentence of input
-    sentence = globals.request.headers.getlist('Text')
+    sentence = str(globals.request.headers.getlist('Text')[0])
     print(sentence)
 
     # convert single sentence to feature
+    tokenizer = tokenization.FullTokenizer(
+        vocab_file=VOCAB_FILE_PATH, do_lower_case=True)
     example = run_classifier.InputExample(
         guid="test-0", text_a=tokenization.convert_to_unicode(sentence), text_b=None, label=LABELS_LIST[0])
     feature = run_classifier.convert_single_example(
         0, example, LABELS_LIST, MAX_SEQ_LENGTH, tokenizer)
+
+    # get the input of model
     input_ids = np.reshape([feature.input_ids], (1, MAX_SEQ_LENGTH))
     input_mask = np.reshape([feature.input_mask], (1, MAX_SEQ_LENGTH))
     segment_ids = np.reshape([feature.segment_ids], (MAX_SEQ_LENGTH))
     label_ids = [feature.label_id]
 
+    # Construct the request to tensorflow serving
     request = predict_pb2.PredictRequest()
     request.model_spec.name = MODEL_NAME
-    request.model_spec.signature_name = 'predicted_labels'
-    request.inputs['input_ids'].CopyFrom(input_ids)
-    request.inputs['input_mask'].CopyFrom(input_mask)
-    request.inputs['segment_ids'].CopyFrom(segment_ids)
-    request.inputs['label_ids'].CopyFrom(label_ids)
+    request.model_spec.signature_name = 'serving_default'
 
-    grpc_result = stub.Predict(request, 20.0)
-    print(grpc_result)
-    return Response(json.dumps({"123": "456"}), mimetype='application/json')
+    # package the input into request, Note the format of the input(follow the model)
+    request.inputs['input_ids'].CopyFrom(
+        tf.contrib.util.make_tensor_proto(input_ids, shape=[1, MAX_SEQ_LENGTH], dtype=tf.int32))
+    request.inputs['input_mask'].CopyFrom(
+        tf.contrib.util.make_tensor_proto(input_mask, shape=[1, MAX_SEQ_LENGTH], dtype=tf.int32))
+    request.inputs['label_ids'].CopyFrom(
+        tf.contrib.util.make_tensor_proto(label_ids, shape=[1], dtype=tf.int32))
+    request.inputs['segment_ids'].CopyFrom(
+        tf.contrib.util.make_tensor_proto(segment_ids, shape=[1, MAX_SEQ_LENGTH], dtype=tf.int32))
+
+    # do predict
+    result = stub.Predict(request, 120.0)  # 10 secs timeout
+
+    # parse the result
+    probabilities_tensor_proto = result.outputs["probabilities"]
+    probabilities = list(probabilities_tensor_proto.float_val)
+    probabilities_np = np.array(probabilities)
+    top3_index_np = probabilities_np.argsort()[-3:][::-1]
+    probabilities_top3 = probabilities_np[top3_index_np]
+    label_top3 = np.array(LABELS_LIST)[top3_index_np]
+    # shape = tf.TensorShape(probabilities_tensor_proto.tensor_shape)
+    # probabilities = np.array(probabilities_tensor_proto.float_val).reshape(
+    #     shape.as_list())
+    result_list = []
+    for index in range(3):
+        result_list.append({"label":label_top3[index],"score":probabilities_top3[index]})
+    output_json = {"predictions":[{"result":result_list}]}
+    return Response(json.dumps(output_json), mimetype='application/json')
 
 
 port = os.getenv('PORT', '5000')
