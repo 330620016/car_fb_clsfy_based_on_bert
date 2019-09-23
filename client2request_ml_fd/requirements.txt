@@ -14,3 +14,4 @@ cfenv>=0.5.3
 pyhdb>=0.3.2
 # workaround
 certifi==2018.1.18
+bert-tensorflow==1.0.1
