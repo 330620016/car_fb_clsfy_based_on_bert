@@ -1,4 +1,6 @@
 .vscode
 .git
 .idea
-client2request_ml_fd/__pycache__
+bert_base/
+data/
+output/
