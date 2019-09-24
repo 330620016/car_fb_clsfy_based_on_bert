@@ -12,9 +12,9 @@ for this train, we **Using SavedModel with Estimators**
 estimator.export_savedmodel(export_dir_base, serving_input_receiver_fn)
 ```
 
-`export_dir_base: ` the folder to savd model
+`export_dir_base` : the folder to savd model
 
-`serving_input_receiver_fn:` serving input_fn
+`serving_input_receiver_fn` : serving input_fn
 
 1. Prepare serving inputs
 
@@ -109,7 +109,7 @@ tensorflow/serving   latest-devel        e88481fe4fbe        2 months ago       
     
 
 ``` shell
-    docker run -it --name=tf_serving_with_dev -p 8500:8500 -p 8501:8501 -v /home/wiki/share_folder/text_classification_based_on_bert/output/pb:/models e88481fe4fbe
+$ docker run -it --name=tf_serving_with_dev -p 8500:8500 -p 8501:8501 -v /home/wiki/share_folder/text_classification_based_on_bert/output/pb:/models e88481fe4fbe
 ```
 
 * start serving
@@ -137,7 +137,7 @@ for how to upload/upload the model, follow [SAP Help Portal - SAP Leonardo Machi
 
 ## inference by ml-foundation serving
 
-local client for request to ml-foundation:[client2request_ml_fd/client.py](client2request_ml_fd/client.py)
+local client for request to ml-foundation: [client2request_ml_fd/client.py](client2request_ml_fd/client.py)
 
-client publish to cloud foundary request to ml-foundation (add uaa authorization):[client2request_ml_fd/uaa_client.py](client2request_ml_fd/uaa_client.py)
+client publish to cloud foundary request to ml-foundation (add uaa authorization): [client2request_ml_fd/uaa_client.py](client2request_ml_fd/uaa_client.py)
 
