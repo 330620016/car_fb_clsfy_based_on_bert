@@ -1,0 +1,17 @@
+# network
+grpcio==1.14.1
+Flask==0.12.2
+requests
+
+# security and certification
+sap_xssec>=2.0.7
+cfenv>=0.5.3
+certifi==2018.1.18
+# sapclea-mlpkit
+# sapclea-mlpkit-security==2.2.1
+libs/sapclea_mlpkit-3.0.2-py2.py3-none-any.whl
+
+# model
+# tensorflow==1.7.0
+# bert-tensorflow==1.0.1
+# numpy==1.14.2

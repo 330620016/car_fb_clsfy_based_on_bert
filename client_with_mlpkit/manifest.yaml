@@ -1,0 +1,9 @@
+---
+applications:
+  - name: car_review_ml_client_v1
+    host: car_review_ml_client_v1
+    memory: 1024M
+    timeout: 120
+    buildpack: python_buildpack
+services:
+  - uaa_feedback
