@@ -96,8 +96,9 @@ def main():
     #     shape.as_list())
     result_list = []
     for index in range(3):
-        result_list.append({"label":label_top3[index],"score":probabilities_top3[index]})
-    output_json = {"predictions":[{"result":result_list}]}
+        result_list.append(
+            {"label": label_top3[index], "score": probabilities_top3[index]})
+    output_json = {"predictions": [{"result": result_list}]}
     return Response(json.dumps(output_json), mimetype='application/json')
 
 

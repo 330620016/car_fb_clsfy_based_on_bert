@@ -10,109 +10,168 @@ from flask import Flask, globals, Response, request, g
 # from bert import run_classifier, tokenization, optimization
 # import numpy as np
 
-from sapjwt import jwtValidation
-from sap import xssec
-from functools import wraps
-from cfenv import AppEnv
+# from sapjwt import jwtValidation
+# from sap import xssec
+# from functools import wraps
+# from cfenv import AppEnv
+
+
+import json
+from mlpkitsecurity import *
+from mlpkitsecurity.token_utils import JWTTokenManager
+
 
 app = Flask(__name__)
-env = AppEnv()
-uaaCredentials = env.get_service(label='xsuaa').credentials
+# env = AppEnv()
+# uaaCredentials = env.get_service(label='xsuaa').credentials
 
 
-@app.before_request
-def before_request():
-    g._uaaCredentials = uaaCredentials
+# @app.before_request
+# def before_request():
+#     g._uaaCredentials = uaaCredentials
 
 
-def parseJwt(tokenStr):
-    uaaCredentials = g._uaaCredentials
-    jwtValidator = jwtValidation()
-    # jwtValidator.setSecret(str(uaaCredentials['clientsecret']))
-    jwtValidator.loadPEM(str(uaaCredentials['verificationkey']))
-    result = jwtValidator.checkToken(tokenStr)
-    if (jwtValidator.getErrorDescription() != ""):
-        print("Error in JWT: {error}".format(
-            error=jwtValidator.getErrorDescription()))
-    payload = jwtValidator.getPayload()
-    return json.loads(payload) if (payload != '') else {}
+# def parseJwt(tokenStr):
+#     uaaCredentials = g._uaaCredentials
+#     jwtValidator = jwtValidation()
+#     # jwtValidator.setSecret(str(uaaCredentials['clientsecret']))
+#     jwtValidator.loadPEM(str(uaaCredentials['verificationkey']))
+#     result = jwtValidator.checkToken(tokenStr)
+#     if (jwtValidator.getErrorDescription() != ""):
+#         print("Error in JWT: {error}".format(
+#             error=jwtValidator.getErrorDescription()))
+#     payload = jwtValidator.getPayload()
+#     return json.loads(payload) if (payload != '') else {}
 
 
-def fetchUserToken(request):
-    """fetch user token"""
-    authHeader = request.headers.get('Authorization')
-    if authHeader is None:
-        return None
+# def fetchUserToken(request):
+#     """fetch user token"""
+#     authHeader = request.headers.get('Authorization')
+#     if authHeader is None:
+#         return None
 
-    encodedJwtToken = authHeader.replace('Bearer ', '')
-    return parseJwt(str(encodedJwtToken))
-
-
-def validatejwt(encodedJwtToken):
-    """JWT offline validation"""
-    xs_security = getattr(g, '_sap_xssec', None)
-    if xs_security is None:
-        xs_security = xssec.create_security_context(
-            encodedJwtToken, g._uaaCredentials)
-    if xs_security.get_grant_type is None:
-        return False
-
-    g._sap_xssec = xs_security
-    return True
+#     encodedJwtToken = authHeader.replace('Bearer ', '')
+#     return parseJwt(str(encodedJwtToken))
 
 
-def checktoken():
-    """check JWT"""
-    authHeader = request.headers.get('Authorization')
-    if authHeader is None:
-        return False
+# def validatejwt(encodedJwtToken):
+#     """JWT offline validation"""
+#     xs_security = getattr(g, '_sap_xssec', None)
+#     if xs_security is None:
+#         xs_security = xssec.create_security_context(
+#             encodedJwtToken, g._uaaCredentials)
+#     if xs_security.get_grant_type is None:
+#         return False
 
-    encodedJwtToken = authHeader.replace('Bearer ', '').strip()
-    if encodedJwtToken == '':
-        return False
-
-    return validatejwt(encodedJwtToken)
-
-
-def sendauth():
-    """Sends a 403 response"""
-    return Response('Unauthorized', 401)
+#     g._sap_xssec = xs_security
+#     return True
 
 
-def authenticated(func):
-    """ JWT token check decorator """
+# def checktoken():
+#     """check JWT"""
+#     authHeader = request.headers.get('Authorization')
+#     if authHeader is None:
+#         return False
 
+#     encodedJwtToken = authHeader.replace('Bearer ', '').strip()
+#     if encodedJwtToken == '':
+#         return False
+
+#     return validatejwt(encodedJwtToken)
+
+
+# def sendauth():
+#     """Sends a 403 response"""
+#     return Response('Unauthorized', 401)
+
+
+# def authenticated(func):
+#     """ JWT token check decorator """
+
+#     @wraps(func)
+#     def decorated(*args, **kwargs):
+#         if not checktoken():
+#             return sendauth()
+
+#         return func(*args, **kwargs)
+
+#     return decorated
+
+
+# def get_access_token():
+#     url = "https://inno-demo.authentication.sap.hana.ondemand.com/oauth/token"
+#     querystring = {"grant_type": "client_credentials"}
+#     headers = {
+#         'Authorization': "Basic c2ItYWZiN2RmMTctZjI3NS00MzZkLThiMzgtYzNkN2NjNmYyYjA3IWI1MjgzfG1sLWZvdW5kYXRpb24teHN1YWEtc3RkIWIzMTM6b1ZiTmdRS3FISE1zNGVvZWhxZzhEWFJxUmxvPQ=="
+#     }
+#     response = requests.request(
+#         "POST", url, headers=headers, params=querystring)
+#     if response.status_code == 200:
+#         return 'Bearer ' + json.loads(response.text)['access_token']
+
+
+# def metadata_transformer(metadata):
+#     additions = []
+#     token = get_access_token()
+#     additions.append(('authorization', token))
+#     return tuple(metadata) + tuple(additions)
+
+
+def _check_tenant_info(request):
+    headers = getattr(request, 'headers', None)
+    if not headers or 'tenantName' not in headers:
+        raise SecurityError('No tenantName header given.')
+
+    use_global_tenant = json.loads(os.environ.get(
+        CLEA_UAA_USE_GLOBAL_TENANT, 'false').lower())
+    if use_global_tenant and 'globalTenantName' not in headers:
+        raise SecurityError(
+            'No globalTenantName header given while being configured to use it.')
+
+    return headers['tenantName'], headers['globalTenantName'] if use_global_tenant else None
+
+
+def _validate_cf_uaa_config():
+    if use_xs_uaa():
+        raise SecurityError(
+            'Application is expected to configure for CFUAA but configured for XSUAA.', code=500)
+    if os.getenv(CLEA_UAA_SERVER_BASE_URL) is None:
+        raise SecurityError(CLEA_UAA_SERVER_BASE_URL +
+                            ' is not found in environment to work with CFUAA.', code=500)
+
+
+def checktoken(request, *extra_scopes):
+    _validate_cf_uaa_config()
+    original_token = get_authorization_header(request)
+    tenant_name, global_tenant_name = _check_tenant_info(request)
+    token_manager = JWTTokenManager(
+        base_url=os.environ[CLEA_UAA_SERVER_BASE_URL])
+    public_key = os.environ[MLP_UAA_PUBLIC_KEY] = os.getenv(
+        MLP_UAA_PUBLIC_KEY) or token_manager.get_public_key()
+    validation_scopes = [
+        global_tenant_name] if global_tenant_name else [tenant_name]
+    validation_scopes.extend(extra_scopes)
+    token_ok, access_token = token_manager.validate(access_token=original_token,
+                                                    scopes=validation_scopes,
+                                                    public_key=public_key,
+                                                    online=False)
+    assert token_ok
+    assert access_token == original_token
+
+
+def authorize(func):
     @wraps(func)
     def decorated(*args, **kwargs):
         if not checktoken():
-            return sendauth()
+            return Response('Unauthorized', 401)
 
         return func(*args, **kwargs)
 
     return decorated
 
 
-def get_access_token():
-    url = "https://inno-demo.authentication.sap.hana.ondemand.com/oauth/token"
-    querystring = {"grant_type": "client_credentials"}
-    headers = {
-        'Authorization': "Basic c2ItYWZiN2RmMTctZjI3NS00MzZkLThiMzgtYzNkN2NjNmYyYjA3IWI1MjgzfG1sLWZvdW5kYXRpb24teHN1YWEtc3RkIWIzMTM6b1ZiTmdRS3FISE1zNGVvZWhxZzhEWFJxUmxvPQ=="
-    }
-    response = requests.request(
-        "POST", url, headers=headers, params=querystring)
-    if response.status_code == 200:
-        return 'Bearer ' + json.loads(response.text)['access_token']
-
-
-def metadata_transformer(metadata):
-    additions = []
-    token = get_access_token()
-    additions.append(('authorization', token))
-    return tuple(metadata) + tuple(additions)
-
-
 @app.route('/classify', methods=['POST', 'GET'])
-@authenticated
+@authorize
 def main():
     # # request ml foundation to load model
     # credentials = implementations.ssl_channel_credentials(

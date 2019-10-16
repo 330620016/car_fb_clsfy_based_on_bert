@@ -7,9 +7,8 @@ requests
 sap_xssec>=2.0.7
 cfenv>=0.5.3
 certifi==2018.1.18
-# sapclea-mlpkit
-# sapclea-mlpkit-security==2.2.1
 libs/sapclea_mlpkit-3.0.2-py2.py3-none-any.whl
+libs/sapclea_mlpkit_security-2.2.1-py2.py3-none-any.whl
 
 # model
 # tensorflow==1.7.0
