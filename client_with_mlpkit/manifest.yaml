@@ -5,5 +5,22 @@ applications:
     memory: 1024M
     timeout: 120
     buildpack: python_buildpack
+env:
+    # specify the parameters of model server
+    NAMESPACE: "3f310445-d518-4eec-91b6-ac46541ce536"
+    MODEL_NAME: "car_classification"
+    MODEL_VERSION: "1"
+    # start - mlpkit-security config
+    MLP_USE_XSUAA: true
+    MLP_XSUAA_SERVICE_NAME: xsuaa
+    MLP_XSUAA_SERVICE_INSTANCE_NAME: uaa_feedback
+    MLP_MLSERVICE_DEFAULT_SCOPES: uaa.resource
+    # end - mlpkit-security config
+
+    # start - mlpkit config
+    MLP_FOUNDATION_SERVICE_NAME: ml-foundation
+    MLP_FOUNDATION_SERVICE_INSTANCE_NAME: ml-foundation-demo
+    # end - mlpkit config
 services:
   - uaa_feedback
+  - ml-foundation-demo
