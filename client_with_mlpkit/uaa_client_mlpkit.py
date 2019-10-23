@@ -86,6 +86,7 @@ def handle_error(error):
     response.status_code = error.code
     return response
 
+
 def get_access_token():
     url = "https://inno-demo.authentication.sap.hana.ondemand.com/oauth/token"
     querystring = {"grant_type": "client_credentials"}
@@ -109,10 +110,10 @@ def get_access_token():
 @authenticated
 def main():
     foundation_service_access_token = get_access_token()
-    model_name,namespace,model_version = str(os.getenv("MODEL_NAME")),str(os.getenv("NAMESPACE")),str(os.getenv("MODEL_VERSION"))
-    MQ = ModelQuerier(model_name=model_name, namespace=namespace,model_version=model_version)
-    # compose gRPC request
-    request = predict_pb2.PredictRequest()
+    model_name, namespace, model_version = str(os.getenv("MODEL_NAME")), str(
+        os.getenv("NAMESPACE")), str(os.getenv("MODEL_VERSION"))
+    MQ = ModelQuerier(model_name=model_name,
+                      namespace=namespace, model_version=model_version)
 
     # # request ml foundation to load model
     # credentials = implementations.ssl_channel_credentials(
@@ -140,6 +141,7 @@ def main():
     label_ids = [feature.label_id]
 
     # Construct the request to tensorflow serving
+    # compose gRPC request
     request = predict_pb2.PredictRequest()
     request.model_spec.name = model_name
     request.model_spec.signature_name = 'serving_default'
@@ -155,7 +157,8 @@ def main():
         tf.contrib.util.make_tensor_proto(segment_ids, shape=[1, MAX_SEQ_LENGTH], dtype=tf.int32))
 
     # # do predict
-    result = MQ.predict(request=request,access_token=foundation_service_access_token)
+    result = MQ.predict(
+        request=request, access_token=foundation_service_access_token)
     # result = stub.Predict(request, 120.0)  # 10 secs timeout
 
     # parse the result
