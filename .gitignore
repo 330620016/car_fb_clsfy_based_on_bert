@@ -1,7 +1,7 @@
 .vscode
 .git
-.idea
-bert_base/
+.idea/
+bert_pretrain_model/
 data/
 output/
 .ipynb_checkpoints/
