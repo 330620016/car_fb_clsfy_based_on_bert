@@ -4,3 +4,4 @@
 bert_base/
 data/
 output/
+.ipynb_checkpoints/
