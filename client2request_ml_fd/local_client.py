@@ -11,17 +11,34 @@ import os
 from flask import Flask, globals, request, Response
 import json
 from bert import run_classifier, tokenization, optimization
-from config import MAX_SEQ_LENGTH, LABELS_LIST, VOCAB_FILE_PATH
 import numpy as np
 
 app = Flask(__name__)
 
 
 server = 'localhost:8500'
+model_name = "car_review_cls_cn"
+
+
+def get_config(language: str):
+    MAX_SEQ_LENGTH = 128
+    LABELS_LIST = []
+    VOCAB_FILE_PATH = ""
+    if language == "chinese" or language == "cn" or language == "CN":
+        LABELS_LIST = ['外观', '操控', '动力', '安全辅助', '空间', '能耗', '内饰']
+        VOCAB_FILE_PATH = "../bert_pretrain_model/BERT_Base_Chinese/chinese_L-12_H-768_A-12/vocab.txt"
+    if language == "english" or language == "en" or language == "EN":
+        LABELS_LIST = [
+            'control', 'interior', 'power', 'energy', 'appearance', 'safety',
+            'space'
+        ]
+        VOCAB_FILE_PATH = "../bert_pretrain_model/BERT_Base_Uncased/uncased_L-12_H-768_A-12/vocab.txt"
+    return MAX_SEQ_LENGTH, LABELS_LIST, VOCAB_FILE_PATH
 
 
 @app.route('/', methods=['POST', 'GET'])
 def main():
+    MAX_SEQ_LENGTH, LABELS_LIST, VOCAB_FILE_PATH = get_config("cn")
     # get model from the server
     channel = grpc.insecure_channel(server)
     stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
@@ -35,7 +52,7 @@ def main():
 
     # Construct the request to tensorflow serving
     request = predict_pb2.PredictRequest()
-    request.model_spec.name = 'car_classification'
+    request.model_spec.name = model_name
     request.model_spec.signature_name = 'serving_default'
 
     results = {}
