@@ -1,8 +1,9 @@
 import os
-from grpc.beta import implementations
+# from grpc.beta import implementations
+import grpc
 import tensorflow as tf
 from tensorflow_serving.apis import predict_pb2
-from tensorflow_serving.apis import prediction_service_pb2
+from tensorflow_serving.apis import prediction_service_pb2_grpc
 import json
 import requests
 import flask
@@ -10,47 +11,101 @@ from flask import Flask, globals, Response, request, g
 
 from bert import run_classifier, tokenization, optimization
 import numpy as np
-from config import MODEL_NAME, MODEL_SERVER_HOST, MODEL_SERVER_PORT, ROOT_CERT, LABELS_LIST, MAX_SEQ_LENGTH, VOCAB_FILE_PATH
+
+from sapjwt import jwtValidation
+from sap import xssec
+from functools import wraps
+from cfenv import AppEnv
+
 app = Flask(__name__)
+env = AppEnv()
+uaaCredentials = env.get_service(label='xsuaa').credentials
+
+MAX_SEQ_LENGTH = 128
+
+LABELS_LIST = str(os.getenv('LABELS', '')).replace(" ", "").split(",")
+VOCAB_FILE_PATH = str(os.getenv('VOCAB_FILE_PATH', ''))
+MODEL_NAME = str(os.getenv('MODEL_NAME', ''))
+MODEL_SERVER_HOST = str(os.getenv('MODEL_SERVER_HOST', ''))
+MODEL_SERVER_PORT = int(os.getenv('MODEL_SERVER_PORT', ''))
+ROOT_CERT = str(os.getenv('ROOT_CERT', '')).replace('\\n', '\n')
+
+
+@app.before_request
+def before_request():
+    g._uaaCredentials = uaaCredentials
+
+
+def validatejwt(encodedJwtToken):
+    """JWT offline validation"""
+    xs_security = getattr(g, '_sap_xssec', None)
+    if xs_security is None:
+        xs_security = xssec.create_security_context(
+            encodedJwtToken, g._uaaCredentials)
+    if xs_security.get_grant_type is None:
+        return False
+    g._sap_xssec = xs_security
+    return True
+
+
+def checktoken():
+    """check JWT"""
+    authHeader = request.headers.get('Authorization')
+    if authHeader is None:
+        return False
+    encodedJwtToken = authHeader.replace('Bearer ', '').strip()
+    if encodedJwtToken == '':
+        return False
+    return validatejwt(encodedJwtToken)
+
+
+def sendauth():
+    """Sends a 403 response"""
+    return Response('Unauthorized', 401)
+
+
+def authenticated(func):
+    """ JWT token check decorator """
+
+    @wraps(func)
+    def decorated(*args, **kwargs):
+        if not checktoken():
+            return sendauth()
+        return func(*args, **kwargs)
+    return decorated
 
 
 def get_access_token():
-    print("******  begain to get access token  ******")
     url = "https://inno-demo.authentication.sap.hana.ondemand.com/oauth/token"
     querystring = {"grant_type": "client_credentials"}
     headers = {
-        'Authorization': "Basic c2ItYWZiN2RmMTctZjI3NS00MzZkLThiMzgtYzNkN2NjNmYyYjA3IWI1MjgzfG1sLWZvdW5kYXRpb24teHN1YWEtc3RkIWIzMTM6b1ZiTmdRS3FISE1zNGVvZWhxZzhEWFJxUmxvPQ=="
+        'Authorization': "Basic c2ItZDZhYTZjY2QtY2QyYy00ZGFiLTk1NDYtZTMwNzkxYjQ0MGQyIWI1MjgzfG1sLWZvdW5kYXRpb24teHN1YWEtc3RkIWIzMTM6M00ybnRYdjZyKzRLbTlKWXkwRWxZQnBtcWdZPQ=="
     }
     response = requests.request(
         "POST", url, headers=headers, params=querystring)
     if response.status_code == 200:
-        print("******   Done   *****")
         return 'Bearer ' + json.loads(response.text)['access_token']
-    else:
-        print("******   get token wrong   ******")
-        return
 
 
-def metadata_transformer(metadata):
-    additions = []
+def metadata_transformer():
+    metadata = []
     token = get_access_token()
-    additions.append(('authorization', token))
-    return tuple(metadata) + tuple(additions)
+    metadata.append(('authorization', token))
+    return tuple(metadata)
 
 
 @app.route('/classify', methods=['POST', 'GET'])
+@authenticated
 def main():
-    # request ml foundation to load model
-    credentials = implementations.ssl_channel_credentials(
-        root_certificates=ROOT_CERT)
-    channel = implementations.secure_channel(
-        MODEL_SERVER_HOST, MODEL_SERVER_PORT, credentials)
-    stub = prediction_service_pb2.beta_create_PredictionService_stub(
-        channel, metadata_transformer=metadata_transformer)
+
+    credentials = grpc.ssl_channel_credentials(
+        root_certificates=ROOT_CERT.encode())
+    channel = grpc.secure_channel('{}:{}'.format(
+        MODEL_SERVER_HOST, MODEL_SERVER_PORT), credentials)
+    stub = prediction_service_pb2_grpc.PredictionServiceStub(channel)
 
     # get the sentence of input
     sentence = str(globals.request.headers.getlist('Text')[0])
-    print(sentence)
 
     # convert single sentence to feature
     tokenizer = tokenization.FullTokenizer(
@@ -82,7 +137,8 @@ def main():
         tf.contrib.util.make_tensor_proto(segment_ids, shape=[1, MAX_SEQ_LENGTH], dtype=tf.int32))
 
     # do predict
-    result = stub.Predict(request, 120.0)  # 10 secs timeout
+    result = stub.Predict(
+        request, 100, metadata=metadata_transformer())  # 120 secs timeout
 
     # parse the result
     probabilities_tensor_proto = result.outputs["probabilities"]
@@ -97,12 +153,10 @@ def main():
     result_list = []
     for index in range(3):
         result_list.append(
-            {"label": label_top3[index], "score": probabilities_top3[index]})
-    output_json = {"predictions": [{"result": result_list}]}
+            {"label": label_top3[index], "score": str(probabilities_top3[index])})
+    output_json = {"predictions": [{"results": result_list}]}
     return Response(json.dumps(output_json), mimetype='application/json')
 
 
-port = os.getenv('PORT', '5000')
 if __name__ == "__main__":
-    app.debug = not os.getenv('PORT')
-    app.run(host='0.0.0.0', port=int(port))
+    app.run(host='0.0.0.0', port=8080, threaded=True, debug=True)

@@ -17,7 +17,7 @@ app = Flask(__name__)
 
 
 server = 'localhost:8500'
-model_name = "car_review_cls_cn"
+model_name = "car_fb_clsfy_cn"
 
 
 def get_config(language: str):
