@@ -1,6 +1,6 @@
 # network
 grpcio==1.14.1
-Flask==0.12.2
+Flask==1.0
 requests
 protobuf==3.6.0
 
