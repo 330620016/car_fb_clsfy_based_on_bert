@@ -1,0 +1,12 @@
+---
+applications:
+  - name: car_fb_clsfy_en_di
+    host: car_fb_clsfy_en_di
+    memory: 1024M
+    timeout: 120
+    buildpack: python_buildpack
+env:
+  TF_CPP_MIN_VLOG_LEVEL: 3
+  DEPLOYMENT_URL_DI: https://vsystem.ingress.dh-qx9h8hsuh.dh-canary.shoot.live.k8s-hana.ondemand.com/app/pipeline-modeler/openapi/service/616617d8-432e-4fde-895e-67a8035f752e/
+  LABELS: control,interior,power,appearance,safety,energy,space
+  VOCAB_FILE_PATH: ./vocab_en.txt
